@@ -61,6 +61,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef _WIN32
+	#include <windows.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -108,28 +112,28 @@ static struct option long_opts[] = {
 };
 
 enum AV_CONTAINER_ID {
-    AV_CONTAINER_ID_MP3,
-		AV_CONTAINER_ID_FLAC,
-		AV_CONTAINER_ID_OGG,
-		AV_CONTAINER_ID_MP4,
-		AV_CONTAINER_ID_ASF,
-		AV_CONTAINER_ID_WAV,
-		AV_CONTAINER_ID_WV,
-		AV_CONTAINER_ID_AIFF,
-		AV_CONTAINER_ID_APE
+	AV_CONTAINER_ID_MP3,
+	AV_CONTAINER_ID_FLAC,
+	AV_CONTAINER_ID_OGG,
+	AV_CONTAINER_ID_MP4,
+	AV_CONTAINER_ID_ASF,
+	AV_CONTAINER_ID_WAV,
+	AV_CONTAINER_ID_WV,
+	AV_CONTAINER_ID_AIFF,
+	AV_CONTAINER_ID_APE
 };
 
 // FFmpeg container short names
 static const char *AV_CONTAINER_NAME[] = {
-    "mp3",
-    "flac",
-    "ogg",
-    "mov,mp4,m4a,3gp,3g2,mj2",
-    "asf",
-    "wav",
-		"wv",
-		"aiff",
-		"ape"
+	"mp3",
+	"flac",
+	"ogg",
+	"mov,mp4,m4a,3gp,3g2,mj2",
+	"asf",
+	"wav",
+	"wv",
+	"aiff",
+	"ape"
 };
 
 int name_to_id(const char *str) {
@@ -155,6 +159,7 @@ char     lavf_version[15] = "";
 
 static inline void help(void);
 static inline void version(void);
+static inline bool enable_vt_mode(void);
 
 int main(int argc, char *argv[]) {
 	int rc, i;
@@ -175,6 +180,9 @@ int main(int argc, char *argv[]) {
 	bool lowercase      = false; // force MP3 ID3v2 tags to lowercase?
 	bool strip          = false; // MP3 ID3v2: strip other tag types?
 	int  id3v2version   = 4;     // MP3 ID3v2 version to write; can be 3 or 4
+
+	// enable virtual terminal mode on Windows
+	enable_vt_mode();
 
 	// libebur128 version check -- versions before 1.2.4 aren’t recommended
 	ebur128_get_version(&ebur128_v_major, &ebur128_v_minor, &ebur128_v_patch);
@@ -220,8 +228,8 @@ int main(int argc, char *argv[]) {
 				max_true_peak_level = strtod(optarg, &rest);
 
 				if (!rest ||
-				    (rest == optarg) ||
-				    !isfinite(pre_gain))
+					(rest == optarg) ||
+					!isfinite(pre_gain))
 					fail_printf("Invalid max. true peak level (dBTP)");
 				break;
 			}
@@ -231,8 +239,8 @@ int main(int argc, char *argv[]) {
 				pre_gain = strtod(optarg, &rest);
 
 				if (!rest ||
-				    (rest == optarg) ||
-				    !isfinite(pre_gain))
+					(rest == optarg) ||
+					!isfinite(pre_gain))
 					fail_printf("Invalid pregain value (dB/LU)");
 				break;
 			}
@@ -728,4 +736,30 @@ static inline void version(void) {
 	printf("  %s %s\n", "libebur128", ebur128_version);
 	printf("  %s %s\n", "libavformat", lavf_version);
 	printf("  %s %s\n", "libswresample", swr_version);
+}
+
+static inline bool enable_vt_mode(void) {
+
+#if defined _WIN32 || defined __CYGWIN__
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (hOut == INVALID_HANDLE_VALUE)
+	{
+		return false;
+	}
+
+	DWORD dwMode = 0;
+	if (!GetConsoleMode(hOut, &dwMode))
+	{
+		return false;
+	}
+
+	dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	if (!SetConsoleMode(hOut, dwMode))
+	{
+		return false;
+	}
+#endif
+
+	return true;
+
 }
