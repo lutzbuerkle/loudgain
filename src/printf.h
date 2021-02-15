@@ -32,6 +32,16 @@
 extern "C" {
 #endif
 
+#if defined _WIN32 || defined __CYGWIN__
+	#define OK_CHAR		"+"
+	#define FAIL_CHAR	"X"
+#else
+	#define OK_CHAR		"✔"
+	#define FAIL_CHAR	"✘"
+#endif
+#define WARN_CHAR	"!"
+#define DEBUG_CHAR	"¡"
+
 #define COLOR_GREEN	"[1;32m"
 #define COLOR_YELLOW	"[1;33m"
 #define COLOR_RED	"[1;31m"

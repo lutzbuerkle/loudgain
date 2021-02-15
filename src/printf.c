@@ -28,26 +28,31 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define LINE_MAX 255
+
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <syslog.h>
-#include <limits.h>
 
-// Mac OS X has no pty.h, so use util.h instead
-#include "config.h"
-#ifdef HAVE_PTY_H
-	#include <pty.h>
+#if defined _WIN32 || defined __CYGWIN__
+	#include <windows.h>
 #else
-	#include <util.h>
+	// Mac OS X has no pty.h, so use util.h instead
+	#ifdef HAVE_PTY_H
+		#include <pty.h>
+	#else
+		#include <util.h>
+	#endif
+
+	#include <unistd.h>
+	#include <sys/ioctl.h>
+	#include <syslog.h>
 #endif
 
-#include <sys/ioctl.h>
-
 #include "lg-util.h"
+#include "config.h"
 
 int use_syslog = 0;
 int quiet = 0;
@@ -61,7 +66,7 @@ void ok_printf(const char *fmt, ...) {
 	if (quiet) return;
 
 	va_start(args, fmt);
-	do_log("[" COLOR_GREEN "✔" COLOR_OFF "] ", fmt, args);
+	do_log("[" COLOR_GREEN OK_CHAR COLOR_OFF "] ", fmt, args);
 	va_end(args);
 }
 
@@ -71,7 +76,7 @@ void debug_printf(const char *fmt, ...) {
 	if (quiet) return;
 
 	va_start(args, fmt);
-	do_log("[" COLOR_YELLOW "¡" COLOR_OFF "] ", fmt, args);
+	do_log("[" COLOR_YELLOW DEBUG_CHAR COLOR_OFF "] ", fmt, args);
 	va_end(args);
 }
 
@@ -79,7 +84,7 @@ void warn_printf(const char *fmt, ...) {
 	va_list args;
 
 	va_start(args, fmt);
-	do_log("[" COLOR_YELLOW "!" COLOR_OFF "] ", fmt, args);
+	do_log("[" COLOR_YELLOW WARN_CHAR COLOR_OFF "] ", fmt, args);
 	va_end(args);
 }
 
@@ -87,7 +92,7 @@ void err_printf(const char *fmt, ...) {
 	va_list args;
 
 	va_start(args, fmt);
-	do_log("[" COLOR_RED "✘" COLOR_OFF "] ", fmt, args);
+	do_log("[" COLOR_RED FAIL_CHAR COLOR_OFF "] ", fmt, args);
 	va_end(args);
 }
 
@@ -95,7 +100,7 @@ void fail_printf(const char *fmt, ...) {
 	va_list args;
 
 	va_start(args, fmt);
-	do_log("[" COLOR_RED "✘" COLOR_OFF "] ", fmt, args);
+	do_log("[" COLOR_RED FAIL_CHAR COLOR_OFF "] ", fmt, args);
 	va_end(args);
 
 	_exit(EXIT_FAILURE);
@@ -111,7 +116,7 @@ void sysf_printf(const char *fmt, ...) {
 	if (rc < 0) fail_printf("OOM");
 
 	va_start(args, fmt);
-	do_log("[" COLOR_RED "✘" COLOR_OFF "] ", format, args);
+	do_log("[" COLOR_RED FAIL_CHAR COLOR_OFF "] ", format, args);
 	va_end(args);
 
 	_exit(EXIT_FAILURE);
@@ -177,13 +182,34 @@ static void do_log(const char *pre, const char *fmt, va_list args) {
 	rc = snprintf(format, LINE_MAX, "%s%s\n", use_syslog ? "" : pre, fmt);
 	if (rc < 0) fail_printf("EIO");
 
+#if defined _WIN32 || defined __CYGWIN__
+	if (use_syslog == 0)
+	{
+		vfprintf(stderr, format, args);
+		fflush(stderr);
+	}
+#else
 	if (use_syslog == 1)
 		vsyslog(LOG_CRIT, format, args);
 	else
 		vfprintf(stderr, format, args);
+#endif
 }
 
 static void get_screen_size(int fd, unsigned *w, unsigned *h) {
+
+#if defined _WIN32 || defined __CYGWIN__
+	CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	GetConsoleScreenBufferInfo(hOut, &csbiInfo);
+
+	if (w != NULL)
+		*w = csbiInfo.srWindow.Right - csbiInfo.srWindow.Left + 1;
+
+	if (h != NULL)
+		*h = csbiInfo.srWindow.Bottom - csbiInfo.srWindow.Top;
+#else
 	struct winsize ws;
 
 	if (ioctl(fd, TIOCGWINSZ, &ws) < 0 || !ws.ws_row || !ws.ws_col)
@@ -194,4 +220,6 @@ static void get_screen_size(int fd, unsigned *w, unsigned *h) {
 
 	if (h != NULL)
 		*h = ws.ws_row;
+#endif
+
 }
